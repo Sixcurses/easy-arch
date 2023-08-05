@@ -292,14 +292,14 @@ done
 # until rootpass_selector; do : ; done
 
 # Debug
-kernel="linux-zen"
-network_choice=2
-username="test"
-userpass="testing"
-rootpass="testing"
-hostname="easyarch"
-locale="en_US.UTF-8"
-kblayout="us"
+# kernel="linux-zen"
+# network_choice=2
+# username="test"
+# userpass="testing"
+# rootpass="testing"
+# hostname="easyarch"
+# locale="en_US.UTF-8"
+# kblayout="us"
 
 
 # Warn user about deletion of old partition scheme.
@@ -336,156 +336,170 @@ mkfs.fat -F 32 "$ESP" &>/dev/null
 # Formatting the ROOT partition as BTRFS.
 info_print "Formatting the ROOT partition as BTRFS."
 mkfs.btrfs -f -n 32k "$ROOT" &>/dev/null
-BTRFS=$(blkid -s UUID -o value $ROOT)
-mount UUID="$BTRFS" /mnt
 
-# # Creating BTRFS subvolumes.
-# info_print "Creating BTRFS subvolumes."
-# subvols=(snapshots var_pkgs var_log home root srv)
-# for subvol in '' "${subvols[@]}"; do
-#     btrfs su cr /mnt/@"$subvol" &>/dev/null
-# done
-#
-# # Mounting the newly created subvolumes.
-# umount /mnt
-# info_print "Mounting the newly created subvolumes."
-# mountopts="ssd,noatime,compress-force=zstd:3,discard=async"
-# mount -o "$mountopts",subvol=@ "$BTRFS" /mnt
-# mkdir -p /mnt/{home,root,srv,.snapshots,var/{log,cache/pacman/pkg},boot}
-# for subvol in "${subvols[@]:2}"; do
-#     mount -o "$mountopts",subvol=@"$subvol" "$BTRFS" /mnt/"${subvol//_//}"
-# done
-# chmod 750 /mnt/root
-# mount -o "$mountopts",subvol=@snapshots "$BTRFS" /mnt/.snapshots
-# mount -o "$mountopts",subvol=@var_pkgs "$BTRFS" /mnt/var/cache/pacman/pkg
-# chattr +C /mnt/var/log
-# mount "$ESP" /mnt/boot/
-#
-# # Checking the microcode to install.
-# microcode_detector
-#
-# # Pacstrap (setting up a base sytem onto the new root).
-# info_print "Installing the base system (it may take a while)."
-# pacstrap -K /mnt base "$kernel" "$microcode" linux-firmware "$kernel"-headers btrfs-progs grub grub-btrfs rsync efibootmgr snapper reflector snap-pac zram-generator sudo &>/dev/null
-#
-# # Setting up the hostname.
-# echo "$hostname" > /mnt/etc/hostname
-#
-# # Generating /etc/fstab.
-# info_print "Generating a new fstab."
-# genfstab -U /mnt >> /mnt/etc/fstab
-#
-# # Configure selected locale and console keymap
-# sed -i "/^#$locale/s/^#//" /mnt/etc/locale.gen
-# echo "LANG=$locale" > /mnt/etc/locale.conf
-# echo "KEYMAP=$kblayout" > /mnt/etc/vconsole.conf
-#
-# # Setting hosts file.
-# info_print "Setting hosts file."
-# cat > /mnt/etc/hosts <<EOF
-# 127.0.0.1   localhost
-# ::1         localhost
-# 127.0.1.1   $hostname.localdomain   $hostname
-# EOF
-#
-# # Virtualization check.
-# virt_check
-#
-# # Setting up the network.
-# network_installer
-#
-# # Configuring /etc/mkinitcpio.conf.
-# info_print "Configuring /etc/mkinitcpio.conf."
-# cat > /mnt/etc/mkinitcpio.conf <<EOF
-# HOOKS=(systemd autodetect keyboard sd-vconsole modconf block sd-encrypt filesystems)
-# EOF
-#
-# # Setting up LUKS2 encryption in grub.
-# info_print "Setting up grub config."
-# UUID=$(blkid -s UUID -o value $ROOT)
-# sed -i "\,^GRUB_CMDLINE_LINUX=\"\",s,\",&rd.luks.name=$UUID=cryptroot root=$BTRFS," /mnt/etc/default/grub
-#
-# # Configuring the system.
-# info_print "Configuring the system (timezone, system clock, initramfs, Snapper, GRUB)."
-# arch-chroot /mnt /bin/bash -e <<EOF
-#
-#     # Setting up timezone.
-#     ln -sf /usr/share/zoneinfo/$(curl -s http://ip-api.com/line?fields=timezone) /etc/localtime &>/dev/null
-#
-#     # Setting up clock.
-#     hwclock --systohc
-#
-#     # Generating locales.
-#     locale-gen &>/dev/null
-#
-#     # Generating a new initramfs.
-#     mkinitcpio -P &>/dev/null
-#
-#     # Snapper configuration.
-#     umount /.snapshots
-#     rm -r /.snapshots
-#     snapper --no-dbus -c root create-config /
-#     btrfs subvolume delete /.snapshots &>/dev/null
-#     mkdir /.snapshots
-#     mount -a &>/dev/null
-#     chmod 750 /.snapshots
-#
-#     # Installing GRUB.
-#     grub-install --target=x86_64-efi --efi-directory=/boot/ --bootloader-id=GRUB &>/dev/null
-#
-#     # Creating grub config file.
-#     grub-mkconfig -o /boot/grub/grub.cfg &>/dev/null
-#
-# EOF
-#
-# # Setting root password.
-# info_print "Setting root password."
-# echo "root:$rootpass" | arch-chroot /mnt chpasswd
-#
-# # Setting user password.
-# if [[ -n "$username" ]]; then
-#     echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/wheel
-#     info_print "Adding the user $username to the system with root privilege."
-#     arch-chroot /mnt useradd -m -G wheel -s /bin/bash "$username"
-#     info_print "Setting user password for $username."
-#     echo "$username:$userpass" | arch-chroot /mnt chpasswd
-# fi
-#
-# # Boot backup hook.
-# info_print "Configuring /boot backup when pacman transactions are made."
-# mkdir /mnt/etc/pacman.d/hooks
-# cat > /mnt/etc/pacman.d/hooks/50-bootbackup.hook <<EOF
-# [Trigger]
-# Operation = Upgrade
-# Operation = Install
-# Operation = Remove
-# Type = Path
-# Target = usr/lib/modules/*/vmlinuz
-#
-# [Action]
-# Depends = rsync
-# Description = Backing up /boot...
-# When = PostTransaction
-# Exec = /usr/bin/rsync -a --delete /boot /.bootbackup
-# EOF
-#
-# # ZRAM configuration.
-# info_print "Configuring ZRAM."
-# cat > /mnt/etc/systemd/zram-generator.conf <<EOF
-# [zram0]
-# zram-size = min(ram, 8192)
-# EOF
-#
-# # Pacman eye-candy features.
-# info_print "Enabling colours, animations, and parallel downloads for pacman."
-# sed -Ei 's/^#(Color)$/\1\nILoveCandy/;s/^#(ParallelDownloads).*/\1 = 10/' /mnt/etc/pacman.conf
-#
-# # Enabling various services.
-# info_print "Enabling Reflector, automatic snapshots, BTRFS scrubbing and systemd-oomd."
-# services=(reflector.timer snapper-timeline.timer snapper-cleanup.timer btrfs-scrub@-.timer btrfs-scrub@home.timer btrfs-scrub@var-log.timer btrfs-scrub@\\x2esnapshots.timer grub-btrfs.path systemd-oomd)
-# for service in "${services[@]}"; do
-#     systemctl enable "$service" --root=/mnt &>/dev/null
-# done
+#Get UUID of partitions
+ESPUUID=$(blkid -s UUID -o value $ESP)
+ROOTUUID=$(blkid -s UUID -o value $ROOT)
+
+# Mount BTRFS Partition
+mount UUID="$ROOTUUID" /mnt
+
+# Creating BTRFS subvolumes.
+info_print "Creating BTRFS subvolumes."
+subvols=(/.snapshots /home /opt /root /srv /tmp /var)
+for subvol in '' "${subvols[@]}"; do
+    btrfs su cr /mnt/@"$subvol"
+done
+
+mkdir /mnt/@/.snapshots/1
+mkdir /mnt/@/boot
+mkdir /mnt/@/usr
+btrfs subvolume create /mnt/@/.snapshots/1/snapshot
+btrfs subvolume create /mnt/@/boot/grub
+btrfs subvolume create /mnt/@/usr/local
+
+# Complete subvols array
+subvols+=(/boot/grub /usr/local)
+
+cat >/mnt/@/.snapshots/1/info.xml << EOF
+<?xml version="1.0"?>
+<snapshot>
+	<type>single</type>
+	<num>1</num>
+	<date>$(date +"%Y-%m-%d %H:%M:%S")</date>
+	<description>First Root Filesystem Created at Installation</description>
+</snapshot>
+EOF
+
+# Set /@/mnt/.snapshots/1/snapshot as the default subvolume
+btrfs subvolume set-default $(btrfs subvolume list /mnt | grep "@/.snapshots/1/snapshot" | grep -oP '(?<=ID )[0-9]+') /mnt
+
+# Disable copy-on-write for the /@/var subvolume
+chattr +C /mnt/@/var
+
+# Mounting the newly created subvolumes.
+umount /mnt
+info_print "Mounting the newly created subvolumes."
+mountopts="ssd,noatime,compress-force=zstd:3,discard=async"
+mount UUID="$ROOTUUID" -o "$mountopts" /mnt
+mkdir -p /mnt/{.snapshots,boot/grub,home,opt,srv,tmp,usr/local,var,efi}
+for subvol in "${subvols[@]:2}"; do
+    mount UUID="$ROOTUUID" -o subvol=@"$subvol","$mountopts" /mnt/"${subvol}"
+done
+chmod 750 /mnt/root
+mount UUID="$ESPUUID" /mnt/efi
+
+read -p "Press enter to continue"
+
+# Checking the microcode to install.
+microcode_detector
+
+# Pacstrap (setting up a base sytem onto the new root).
+info_print "Installing the base system (it may take a while)."
+pacstrap -K /mnt base "$kernel" "$microcode" linux-firmware "$kernel"-headers btrfs-progs grub grub-btrfs rsync efibootmgr snapper reflector snap-pac zram-generator sudo micro os-prober xorg-server xorg-apps git base-devel plasma-meta kde-utilities kde-system dolphin-plugins kde-graphics neofetch zsh man-db man-pages texinfo
+
+# Setting up the hostname.
+echo "$hostname" > /mnt/etc/hostname
+
+# Generating /etc/fstab.
+info_print "Generating a new fstab."
+genfstab -U /mnt >> /mnt/etc/fstab
+
+# Modify fstab && Grub files
+info_print "Setting up grub and fstab config."
+sed -i 's/subvolid=[0-9]\+,subvol=\/@\/\.snapshots\/1\/snapshot//g' /mnt/etc/fstab
+sed -i 's/rootflags=subvol=\${rootsubvol}//g' /mnt/etc/grub.d/10_linux
+sed -i 's/rootflags=subvol=\${rootsubvol}//g' /mnt/etc/grub.d/20_linux_xen
+
+# Configure selected locale and console keymap
+sed -i "/^#$locale/s/^#//" /mnt/etc/locale.gen
+echo "LANG=$locale" > /mnt/etc/locale.conf
+echo "KEYMAP=$kblayout" > /mnt/etc/vconsole.conf
+
+# Setting hosts file.
+info_print "Setting hosts file."
+cat > /mnt/etc/hosts <<EOF
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   $hostname.localdomain   $hostname
+EOF
+
+# Virtualization check.
+virt_check
+
+# Setting up the network.
+network_installer
+
+# Configuring /etc/mkinitcpio.conf.
+info_print "Configuring /etc/mkinitcpio.conf."
+cat > /mnt/etc/mkinitcpio.conf <<EOF
+HOOKS=(systemd autodetect keyboard sd-vconsole modconf block sd-encrypt filesystems)
+EOF
+
+# Configuring the system.
+info_print "Configuring the system (timezone, system clock, initramfs, Snapper, GRUB)."
+arch-chroot /mnt /bin/bash -e <<EOF
+
+    # Setting up timezone.
+    ln -sf /usr/share/zoneinfo/$(curl -s http://ip-api.com/line?fields=timezone) /etc/localtime &>/dev/null
+
+    # Setting up clock.
+    hwclock --systohc
+
+    # Generating locales.
+    locale-gen &>/dev/null
+
+    # Generating a new initramfs.
+    mkinitcpio -P &>/dev/null
+
+    # Snapper configuration.
+    umount /.snapshots
+    rm -r /.snapshots
+    snapper --no-dbus -c root create-config /
+    btrfs subvolume delete /.snapshots
+    mkdir /.snapshots
+    mount -a
+    chmod 750 /.snapshots
+
+    # Installing GRUB.
+    grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=ARCH --modules="normal test efi_gop efi_uga search echo linux all_video gfxmenu gfxterm_background gfxterm_menu gfxterm loadenv configfile gzio part_gpt btrfs"
+
+    # Creating grub config file.
+    grub-mkconfig -o /boot/grub/grub.cfg
+
+EOF
+
+# Setting root password.
+info_print "Setting root password."
+echo "root:$rootpass" | arch-chroot /mnt chpasswd
+
+# Setting user password.
+if [[ -n "$username" ]]; then
+    echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/wheel
+    info_print "Adding the user $username to the system with root privilege."
+    arch-chroot /mnt useradd -m -G wheel -s /bin/bash "$username"
+    info_print "Setting user password for $username."
+    echo "$username:$userpass" | arch-chroot /mnt chpasswd
+fi
+
+
+# ZRAM configuration.
+info_print "Configuring ZRAM."
+cat > /mnt/etc/systemd/zram-generator.conf <<EOF
+[zram0]
+zram-size = min(ram, 8192)
+EOF
+
+# Pacman eye-candy features.
+info_print "Enabling colours, animations, and parallel downloads for pacman."
+sed -Ei 's/^#(Color)$/\1\nILoveCandy/;s/^#(ParallelDownloads).*/\1 = 10/' /mnt/etc/pacman.conf
+
+# Enabling various services.
+info_print "Enabling Reflector, automatic snapshots, BTRFS scrubbing and systemd-oomd."
+services=(sddm reflector.timer)
+for service in "${services[@]}"; do
+    systemctl enable "$service" --root=/mnt &>/dev/null
+done
 
 # Finishing up.
 info_print "Done, you may now wish to reboot (further changes can be done by chrooting into /mnt)."
